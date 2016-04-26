@@ -1,4 +1,4 @@
-package book_trader_agent;
+package mas.cv4;
 
 import jade.content.ContentElement;
 import jade.content.lang.Codec;
