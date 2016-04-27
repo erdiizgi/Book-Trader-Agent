@@ -76,7 +76,7 @@ public class BookTrader extends Agent {
         addBehaviour(new StartTradingBehaviour(this, MessageTemplate.MatchPerformative(ACLMessage.REQUEST)));
         
         myOffer = 0;
-        bargainAmount = 20;
+        bargainAmount = 40;
     }
 
     @Override
