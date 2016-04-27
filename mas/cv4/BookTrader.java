@@ -11,6 +11,7 @@ import jade.content.onto.basic.Result;
 import jade.core.Agent;
 import jade.core.behaviours.Behaviour;
 import jade.core.behaviours.TickerBehaviour;
+import jade.core.behaviours.WakerBehaviour;
 import jade.domain.DFService;
 import jade.domain.FIPAAgentManagement.*;
 import jade.domain.FIPAException;
@@ -41,6 +42,8 @@ public class BookTrader extends Agent {
     ArrayList<BookInfo> myBooks;
     ArrayList<Goal> myGoal;
     double myMoney;
+    double myOffer;
+    double bargainAmount;
 
     Random rnd = new Random();
 
@@ -71,6 +74,9 @@ public class BookTrader extends Agent {
 
         //add behavior which waits for the StartTrading message
         addBehaviour(new StartTradingBehaviour(this, MessageTemplate.MatchPerformative(ACLMessage.REQUEST)));
+        
+        myOffer = 0;
+        bargainAmount = 20;
     }
 
     @Override
@@ -130,9 +136,20 @@ public class BookTrader extends Agent {
                     myBooks = ai.getBooks();
                     myGoal = ai.getGoals();
                     myMoney = ai.getMoney();
+                    
+                    for(Goal goal: myGoal){
+                        myOffer+=goal.getValue();
+                    }
+                    
+                    myOffer = (myOffer / myGoal.size()) + bargainAmount;
+                    
 
                     //add a behavior which tries to buy a book every two seconds
                     addBehaviour(new TradingBehaviour(myAgent, 2000));
+                    
+                    
+                    //make a discount for every 5 seconds
+                    addBehaviour(new BargainAdjusterBehaviour(myAgent, 5000));
 
                     //add a behavior which sells book to other agents
                     addBehaviour(new SellBook(myAgent, MessageTemplate.MatchPerformative(ACLMessage.CFP)));
@@ -303,7 +320,7 @@ public class BookTrader extends Agent {
                         //find out which offers we can fulfill (we have all requested books and enough money)
                         ArrayList<Offer> canFulfill = new ArrayList<Offer>();
                         for (Offer o: offers) {
-                            if (o.getMoney() > myMoney)
+                            if (o.getMoney() > myMoney/2)
                                 continue;
 
                             boolean foundAll = true;
@@ -341,10 +358,29 @@ public class BookTrader extends Agent {
                         acc.setPerformative(ACLMessage.ACCEPT_PROPOSAL);
                         accepted = true;
 
+                                      
                         //choose an offer
                         Chosen ch = new Chosen();
-                        ch.setOffer(canFulfill.get(rnd.nextInt(canFulfill.size())));
-
+                        boolean deal = false;
+                        for(Offer o : canFulfill){
+                             if (o.getBooks() != null) {
+                                for (BookInfo bi : o.getBooks()) {
+                                    for (Goal g : myGoal) {
+                                        if (g.getBook().getBookName().equals(bi.getBookName())) {
+                                            if(o.getMoney() <= g.getValue()){
+                                                ch.setOffer(o);
+                                                deal = true;
+                                            }
+                                        }    
+                                    }    
+                                }
+                            }
+                        }
+                        
+                        if(!deal){
+                            ch.setOffer(canFulfill.get(rnd.nextInt(canFulfill.size())));
+                        }
+                            
                         c=ch;
                         shouldReceive = cf.getWillSell();
 
@@ -416,7 +452,7 @@ public class BookTrader extends Agent {
 
                     Offer o2 = new Offer();
                     o2.setBooks(bis);
-                    o2.setMoney(20);
+                    o2.setMoney(myOffer);
 
                     ArrayList<Offer> offers = new ArrayList<Offer>();
                     offers.add(o1);
@@ -550,7 +586,19 @@ public class BookTrader extends Agent {
                 } catch (Codec.CodecException e) {
                     e.printStackTrace();
                 }
+            }
+        }
+        
+        public class BargainAdjusterBehaviour extends WakerBehaviour {
 
+            public BargainAdjusterBehaviour(Agent a, long period) {
+                super(a, period);
+            }
+            
+            @Override
+            public void handleElapsedTimeout() {
+                //for every cycle make a %2 discount
+                myOffer -= myOffer/50;
             }
         }
     }
